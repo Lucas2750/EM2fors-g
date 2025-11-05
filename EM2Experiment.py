@@ -50,6 +50,17 @@ class EM2Experiment:
             {'agent_belief': False, 'Part_belief': False, 'Ball_present': True, 'condition': 'P-A-(+)'}
         ]
 
+        # Spørgsmålene til spørgeskemaet
+        self.questionnaire_questions = [
+            "Jeg synes at avataren i denne blok lignede mig.",
+            "Jeg havde en oplevelse af, at avataren i denne blok var mig.",
+            "Jeg havde en oplevelse af, at avatarens identitet eller krop var en forlængelse af min egen.",
+            "Jeg følte, at avataren repræsenterede mig selv.",
+            "Jeg synes det var let at forestille mig situationen fra avatarens perspektiv.",
+            "Jeg følte, at jeg automatisk tog avatarens perspektiv i opgaven.",
+            "Jeg var opmærksom på avatarens overbevisning om, hvor bolden befandt sig."
+        ]
+
         # Opret den fulde liste over forsøg for HVER blok (2 blokke * 8 forsøg + buffer)
         self.trials_list_block1 = self._create_shuffled_trials_list(include_buffer=True)
         self.trials_list_block2 = self._create_shuffled_trials_list(include_buffer=True)
@@ -64,12 +75,12 @@ class EM2Experiment:
     def get_subject_id(self):
         """Indsamler Subject ID og Navn ved hjælp af en dialogboks."""
         # Dialogboks med både ID og Navn
-        dlg = gui.DlgFromDict(dictionary={'Subject ID (Indtast 4 cifre)': '', 'Navn:': ''}, 
+        dlg = gui.DlgFromDict(dictionary={'Subject ID (Indtast 4 cifre)': '', 'Dit navn:': ''}, 
                               title='Eksperiment Information')
         
         if dlg.OK:
             self.subject_id = dlg.dictionary['Subject ID (Indtast 4 cifre)']
-            self.subject_name = dlg.dictionary['Navn:'] # Gemmer navnet
+            self.subject_name = dlg.dictionary['Dit navn:'] # Gemmer navnet
             
             # Validering af 4 cifre for ID
             if not (len(self.subject_id) == 4 and self.subject_id.isdigit()):
@@ -133,7 +144,7 @@ class EM2Experiment:
         "\nDu vil blive vist en video af en bold der bevæger sig." \
         "\nDit job er at i slutningen af videoen skal du svare på om bolden er bag en væg.\n" \
         "\nTryk IKKE på noget hvis bolden IKKE er bag væggen, når væggen fjernes." \
-        "\nTryk på 'SPACE/Mellemrum' hvis den er bag væggen, når væggen fjernes.\n" \
+        "\nTryk på 'SPACE/Mellemrum' når du ser bolden bag væggen, når væggen fjernes.\n" \
         "\nDu skal først svare på dette, når væggen er væk! Dette er vigtigt, så du skal sidde klar.\n" \
         "\nDet er tilfældigt om bolden er bag væggen eller ej." \
         "\nSvar så hurtigt og præcist som muligt.\n" \
@@ -370,16 +381,17 @@ class EM2Experiment:
         
     def _block_transition(self, block_num):
         """Viser en pausebesked mellem blokkene."""
-        agent_type = "Smurf" if block_num == 1 else f"Self-Agent ({self.subject_name})"
+        # Denne funktion er designet til at vise info om den *kommende* blok
+        agent_type = f"Self-Agent ({self.subject_name})" 
         
-        transition_text = visual.TextStim(self.win, text=f"Blok {block_num} er færdig." \
-        f"\nI næste blok skal du observere en ny Agent: {agent_type}." \
+        transition_text = visual.TextStim(self.win, text=f"Forbered dig på BLOK 2." \
+        f"\nI denne blok skal du observere: {agent_type}." \
         "\nTag en kort pause.\n\nTryk på ‘SPACE’ for at fortsætte.", color='white', wrapWidth=1200, height=30)
         transition_text.draw()
         self.win.flip()
         event.waitKeys(keyList=['space'])
 
-
+    # RETTET: block_num tilføjet som argument
     def run_block(self, block_num, trials_list, agent_stim):
         """Kører en hel eksperimentblok."""
         self.current_agent_stim = agent_stim
@@ -390,6 +402,101 @@ class EM2Experiment:
             
             self.run_trial(condition_name, practice=False, is_buffer=is_buffer_trial)
 
+    def questionnaire_block(self, block_num):
+        """Kører spørgeskemaet og logger svarene."""
+        
+        # Bestem hvilken agent der lige er brugt
+        agent_type = "Smurf" if block_num == 1 else "Self"
+        
+        # Instruktioner
+        instructions = visual.TextStim(self.win, text=
+                                        "Du skal nu svare på en række udsagn, der relaterer sig til den blok, du lige har gennemført.\n" \
+                                        "\nDu bliver præsenteret for et udsagn og skal derefter angive" \
+                                        "\nhvor enig du er i det givne udsagn på en skala fra 1-7.\n" \
+                                        "\n**1 = helt uenig og 7 = helt enig**"
+                                        "\n\nTryk på ‘SPACE’ for at komme videre", 
+        color='white', wrapWidth=1200, height=30)
+        instructions.draw()
+        self.win.flip()
+        event.waitKeys(keyList=['space'])
+
+        # Skala tekst (vises på alle spørgsmål)
+        scale_text = visual.TextStim(self.win, text="**1 = Helt uenig** **7 = Helt enig**", 
+                                     pos=[0, -300], height=25, color='gray')
+        
+        # Input/feedback tekst
+        response_text_stim = visual.TextStim(self.win, text="", pos=[0, -150], height=40, color='yellow')
+        
+        for q_idx, question_text in enumerate(self.questionnaire_questions):
+            question_stim = visual.TextStim(self.win, text=f"Udsagn {q_idx + 1}/{len(self.questionnaire_questions)}:\n\n{question_text}", 
+                                            pos=[0, 0], height=35, color='white', wrapWidth=1000)
+            
+            valid_response = False
+            response_str = ""
+            
+            while not valid_response:
+                # 1. Tegn stimuli
+                question_stim.draw()
+                scale_text.draw()
+                response_text_stim.setText(f"Svar (1-7) eller Esc: {response_str}")
+                response_text_stim.draw()
+                self.win.flip()
+                
+                # 2. Hent taster
+                keys = event.getKeys(keyList=['1', '2', '3', '4', '5', '6', '7', 'return', 'backspace', 'escape'])
+                
+                if keys:
+                    key = keys[0]
+                    
+                    if key in ['1', '2', '3', '4', '5', '6', '7']:
+                        # Tillad kun ét ciffer
+                        if len(response_str) == 0:
+                            response_str = key
+                    
+                    elif key == 'backspace':
+                        response_str = "" 
+                        
+                    elif key == 'return':
+                        if response_str in ['1', '2', '3', '4', '5', '6', '7']:
+                            # Svaret er gyldigt
+                            valid_response = True
+                            
+                            # Log data
+                            self.trial_data.append({
+                                'trial_num': self.trial_num,
+                                'trial_type': 'Questionnaire',
+                                'Agent_Type': agent_type,
+                                'Question_ID': q_idx + 1,
+                                'Question_Text': question_text,
+                                'Questionnaire_Response': int(response_str),
+                                # Sæt N/A for Trial-specifikke felter
+                                'is_buffer': 'N/A', 
+                                'response': 'N/A',
+                                'rt': 'N/A',
+                                'Ball_present': 'N/A',
+                                'Part_belief': 'N/A',
+                                'Agent_belief': 'N/A',
+                                'Condition': 'N/A'
+                            })
+                            # Tæl op for at sikre unikke rækkenumre i datafilen
+                            self.trial_num += 1 
+                        else:
+                            # Visuel feedback om ugyldigt input
+                            response_str = ""
+                            
+                    elif key == 'escape':
+                        self.quit_experiment()
+                        
+            # Kort pause mellem spørgsmål
+            core.wait(0.5)
+        
+        # Vis bekræftelse
+        complete_text = visual.TextStim(self.win, text="Spørgeskemaet er færdigt.\n\nTryk på 'SPACE' for at fortsætte.", color='white')
+        complete_text.draw()
+        self.win.flip()
+        event.waitKeys(keyList=['space'])
+
+    
     def run_experiment(self):
         # 1. INDSAMLE SUBJECT ID OG NAVN FØR VINDUE ÅBNES
         self.get_subject_id()
@@ -411,11 +518,13 @@ class EM2Experiment:
         
         # Overgang til Blok 2
         self.trial_num = 0 # Nulstil tælleren for blok 2's data
+        self.questionnaire_block(1)
         self._block_transition(1)
 
         # --- BLOK 2: SELF AGENT (8 trials + 2 buffer) ---
         self.run_block(2, self.trials_list_block2, self.self_agent)
-            
+        self.questionnaire_block(2)
+
         # Gem data
         self.save_data()
         
@@ -436,18 +545,24 @@ class EM2Experiment:
             
         thisExp = data.ExperimentHandler(name='EM2_Kovacs_Replication', dataFileName=full_path)
         
+        # Bestem hvilke nøgler der skal bruges for at logge alle data
+        keys = ['subject_id', 'subject_name', 'trial_num', 'trial_type', 'Agent_Type', 
+                'is_buffer', 'Questionnaire_Response', 'Question_ID', 'Question_Text',
+                'response', 'rt', 'Ball_present', 'Part_belief', 'Agent_belief', 'Condition']
+                
         for trial in self.trial_data:
-            thisExp.addData('subject_id', self.subject_id) # Tilføj ID til hver række
-            thisExp.addData('subject_name', self.subject_name) # NYT: Navn logges
-            thisExp.addData('trial_num', trial['trial_num'])
-            thisExp.addData('trial_type', trial['trial_type'])
-            thisExp.addData('response', trial['response'])
-            thisExp.addData('rt', trial['rt'])
-            thisExp.addData('Ball_present', trial['Ball_present'])
-            thisExp.addData('Part_belief', trial['Part_belief'])
-            thisExp.addData('Agent_belief', trial['Agent_belief'])
-            thisExp.addData('Agent_Type', trial['Agent_Type'])
-            thisExp.addData('is_buffer', trial['is_buffer']) # NYT: is_buffer logges
+            # Sikrer at Questionnaire-data og Trial-data kan logges i samme fil
+            for key in keys:
+                # Brug .get() for at få værdien, eller 'N/A' hvis nøglen ikke findes (f.eks. Trial-felter i Questionnaire-rækker)
+                value = trial.get(key, 'N/A')
+                # For Condition, som kun findes i Trial-data
+                if key == 'Condition':
+                    thisExp.addData(key, trial.get(key, 'N/A')) 
+                elif key == 'Question_Text':
+                    thisExp.addData(key, value)
+                else:
+                    thisExp.addData(key, value)
+            
             thisExp.nextEntry() 
         
         thisExp.close()
