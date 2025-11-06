@@ -3,7 +3,7 @@ import random
 import os
 import sys # Til at afslutte programmet pænt ved annullering af dialog
 
-# VERSION 0.8.5
+# VERSION 0.8.9 (Rettet Skip-funktionalitet - Bruger 'p' i stedet for '+')
 
 # Definer stien til videos
 VIDEO_DIR = 'Assets'
@@ -72,26 +72,23 @@ class EM2Experiment:
         self.self_agent = None
         self.current_agent_stim = None
         self.name_stim = None 
-        self.smurf_name_stim = None # NYT: Smølf navnet
+        self.smurf_name_stim = None 
 
     def get_subject_id(self):
         """Indsamler Subject ID og Navn ved hjælp af en dialogboks."""
-        # Dialogboks med både ID og Navn
         dlg = gui.DlgFromDict(dictionary={'Subject ID (Indtast 4 cifre)': '', 'Dit navn:': ''}, 
                               title='Eksperiment Information')
         
         if dlg.OK:
             self.subject_id = dlg.dictionary['Subject ID (Indtast 4 cifre)']
-            self.subject_name = dlg.dictionary['Dit navn:'] # Gemmer navnet
+            self.subject_name = dlg.dictionary['Dit navn:']
             
-            # Validering af 4 cifre for ID
             if not (len(self.subject_id) == 4 and self.subject_id.isdigit()):
                 print("FEJL: Subject ID skal være 4 cifre. Forsøger igen.")
                 self.subject_id = self.get_subject_id() 
             
             return self.subject_id
         else:
-            # Hvis brugeren trykker Annuller
             core.quit()
             sys.exit()
 
@@ -100,24 +97,19 @@ class EM2Experiment:
         if self.win is None:
             self.win = visual.Window([1280, 720], color='black', fullscr=True, monitor='testMonitor', units='pix') 
             
-            # Opret agent billed stimuli (NY STØRRELSE: 200, 200)
             agent_size = (200, 200)
             self.smurf_agent = visual.ImageStim(self.win, image=os.path.join(VIDEO_DIR, 'smurf1.png'), 
                                                 pos=[-1300, 0], size=agent_size)
             self.self_agent = visual.ImageStim(self.win, image=os.path.join(VIDEO_DIR, 'selfAgent.png'), 
                                                pos=[-1300, 0], size=agent_size)
-            # Initialiser agenten der skal bruges i starten
             self.current_agent_stim = self.smurf_agent
 
-            # NYT: Opret tekst-stimulus til at vise navnet
             if self.subject_name is None:
                 self.subject_name = "Navn" 
             
-            # Navn over Self-Agent (Y = 150 er over agenten med str. 200)
             self.name_stim = visual.TextStim(self.win, text=self.subject_name, 
                                              color='white', pos=[-1300, 150], height=30)
             
-            # NYT: Navn over Smurf-Agent
             self.smurf_name_stim = visual.TextStim(self.win, text="SMØLF", 
                                                    color='white', pos=[-1300, 150], height=30)
 
@@ -126,22 +118,16 @@ class EM2Experiment:
         """Opretter en randomiseret liste af betingelser for en hel blok, inkl. buffer-trials."""
         condition_values = [cond['condition'] for cond in self.conditions]
         
-        # Opretter den shufflede liste af MAIN trials
         trials_list = condition_values * self.num_trials_per_condition
         random.shuffle(trials_list)
         
         if include_buffer:
-            # Vælger tilfældigt 2 trials (med genplacering) til at være buffer
-            # Disse fjernes ikke fra hovedlisten, så der er buffer + 8 trials
             buffer_trials = random.choices(condition_values, k=NUM_BUFFER_TRIALS)
-            
-            # Tilføjer buffer trials FØRST i listen
             trials_list = buffer_trials + trials_list
             
         return trials_list
 
     def show_instructions(self):
-        # Bruger nu self.win
         instructions = visual.TextStim(self.win, text="Velkommen til vores eksperiment!\n" \
         "\nDu vil blive vist en video af en bold der bevæger sig." \
         "\nDit job er at i slutningen af videoen skal du svare på om bolden er bag en væg.\n" \
@@ -157,7 +143,6 @@ class EM2Experiment:
         event.waitKeys(keyList=['space'])
 
     def practice_instructions(self):
-        # ... (Praksis instruktioner som før)
         practice_text = visual.TextStim(self.win, text="Nu vil du starte med nogle prøve forsøg." \
         "\nDisse vil hjælpe dig med at forstå opgaven bedre.\n" \
         "\nTryk på ‘SPACE’ for at starte.", color='white', wrapWidth=1200, height=30)
@@ -176,72 +161,58 @@ class EM2Experiment:
         """Beregn og sæt agentens position og horisontale flip baseret på videoens tidspunkt.
            Returnerer agentens aktuelle X-position.
         """
-        
-        # Start X pos. (uden for skærmen)
         x_start = -1300 
-        # Slut X pos. (lidt til venstre for centrum)
         x_end = -250 
-        
-        current_x = x_start # Standard position
+        current_x = x_start 
 
-        # Funktion til lineær interpolation
         def lerp(start, end, t, t_start, t_end):
             if t < t_start or t > t_end:
                 return None
             progress = (t - t_start) / (t_end - t_start)
             return start + progress * (end - start)
 
-        # 1. Bevægelse ind (0.0s - 3.5s): Bevæger sig mod højre. FlipHoriz = False
         if current_time >= T_START_IN and current_time <= T_END_IN:
             agent_stim.flipHoriz = False 
             current_x = lerp(x_start, x_end, current_time, T_START_IN, T_END_IN)
             if current_x is not None:
                 agent_stim.setPos([current_x, 0])
-        # 2. Bevægelse ud (12.0s - 15.0s): Bevæger sig mod venstre. FlipHoriz = True
         elif current_time >= T_START_OUT and current_time <= T_END_OUT:
             agent_stim.flipHoriz = True 
             current_x = lerp(x_end, x_start, current_time, T_START_OUT, T_END_OUT)
             if current_x is not None:
                 agent_stim.setPos([current_x, 0])
-        # 3. Bevægelse ind (18.0s - 21.0s): Bevæger sig mod højre igen. FlipHoriz = False
         elif current_time >= T_START_IN_2 and current_time <= T_END_IN_2:
             agent_stim.flipHoriz = False 
             current_x = lerp(x_start, x_end, current_time, T_START_IN_2, T_END_IN_2)
             if current_x is not None:
                 agent_stim.setPos([current_x, 0])
-        # --- Fikserede positioner mellem bevægelser ---
-        # Stoppet position (3.5s - 12.0s): Kigger mod højre. FlipHoriz = False
         elif current_time > T_END_IN and current_time < T_START_OUT:
             agent_stim.flipHoriz = False 
             current_x = x_end
             agent_stim.setPos([current_x, 0])
-        # Uden for skærmen (15.0s - 18.0s)
         elif current_time >= T_END_OUT and current_time < T_START_IN_2:
             current_x = x_start
             agent_stim.setPos([current_x, 0])
-        # Stoppet position (21.0s - 25.0s): Kigger mod højre. FlipHoriz = False
         elif current_time > T_END_IN_2 and current_time <= VIDEO_LENGTH:
             agent_stim.flipHoriz = False 
             current_x = x_end
             agent_stim.setPos([current_x, 0])
-        # Uden for skærmen (Før start)
         else:
              current_x = x_start
              agent_stim.setPos([current_x, 0])
 
-        return current_x # Returner X-positionen
+        return current_x 
 
     def run_trial(self, condition_name, practice=False, is_buffer=False):
         self.trial_num += 1
         condition_details = self._get_condition_details(condition_name)
         if not condition_details:
              print(f"Betingelse {condition_name} blev ikke fundet. Springer over.")
-             return
+             return False 
 
         trial_type = condition_name
         ball_is_present = condition_details['Ball_present']
         
-        # --- Video visning og Animation ---
         video_file = os.path.join(VIDEO_DIR, f'{condition_name}.mp4')
         
         if not os.path.exists(video_file):
@@ -250,127 +221,108 @@ class EM2Experiment:
             error_stim.draw()
             self.win.flip()
             core.wait(2)
-            # Log data selvom fil mangler
             self.trial_data.append({'trial_num': self.trial_num, 'trial_type': trial_type, 'response': 'FILE_MISSING', 'ReactionTime': -1, 
                                     'Ball_present': ball_is_present, 'Part_belief': condition_details['Part_belief'],
                                     'Agent_belief': condition_details['agent_belief'], 'Condition': condition_details['condition'],
                                     'Agent_Type': 'Smurf' if self.current_agent_stim == self.smurf_agent else 'Self',
-                                    'is_buffer': is_buffer}) # NYT: is_buffer logges
-            return
+                                    'is_buffer': is_buffer}) 
+            return False 
 
         stimulus = visual.MovieStim3(self.win, filename=video_file, size=(1280, 720), loop=False) 
         
-        # Slet alle gamle events fra bufferen for at sikre præcise RT'er
         event.clearEvents()
         
-        # Initialiser status- og responsvariabler
         responded = False
         response_start_time = 0.0
         response = 'None'
         ReactionTime = -1.0
         
-        # --- Hovedforsøgsløkken ---
-        self.clock.reset() # Nulstil klokken for forsøget
+        self.clock.reset()
         
         while self.clock.getTime() <= VIDEO_LENGTH and stimulus.status != visual.FINISHED:
             current_time = self.clock.getTime()
             
-            # 1. Tegn videoen og agenten (gælder for hele videoen)
+            # **RETTET:** Bruger 'p' som skip-tast
+            keys = event.getKeys(keyList=['space', 'escape', 'p']) 
+            
+            if keys:
+                if 'p' in keys: # HVIS 'p' trykkes: signalér skip
+                    response = 'SKIP_BLOCK'
+                    break
+                elif 'escape' in keys:
+                    self.quit_experiment()
+                elif 'space' in keys and current_time >= RESPONSE_START_TIME and not responded:
+                    responded = True
+                    response = 'space'
+                    ReactionTime = current_time - RESPONSE_START_TIME
+                    break 
+
+            
+            # 1. Tegn videoen og agenten 
             stimulus.draw()
             if current_time is not None:
-                # Gemmer X-positionen, som _animate_agent returnerer
                 agent_x = self._animate_agent(current_time, self.current_agent_stim)
                 self.current_agent_stim.draw()
                 
-                # Håndter Navne-stimulus (svæver over agenten)
                 if self.current_agent_stim == self.self_agent:
-                    self.name_stim.setPos([agent_x, 150]) # Sæt navnet over Self-Agent
+                    self.name_stim.setPos([agent_x, 150]) 
                     self.name_stim.draw()
-                else: # Må være Smurf-agenten
-                    self.smurf_name_stim.setPos([agent_x, 150]) # Sæt navnet over Smurf
+                else: 
+                    self.smurf_name_stim.setPos([agent_x, 150]) 
                     self.smurf_name_stim.draw()
                 
-            # 2. Responsvinduet (starter ved 22.5s)
-            if current_time >= RESPONSE_START_TIME and not responded:
-                # Start RT-målingen præcist ved 22.5s
-                if response_start_time == 0.0:
-                    response_start_time = current_time 
-                
-                # Check for tryk
-                keys = event.getKeys(keyList=['space', 'escape']) 
-                
-                if keys is not None:
-                    if 'escape' in keys:
-                        self.quit_experiment()
-                    elif 'space' in keys:
-                        responded = True
-                        response = 'space'
-                        ReactionTime = current_time - response_start_time
-                        # Bryd løkken her, hvis der er svaret med 'space'
-                        break 
-                
-                # Håndtering af Timeouts
-                if not responded and current_time >= (response_start_time + RESPONSE_DURATION):
-                    responded = True
-                    ReactionTime = RESPONSE_DURATION # 2.5 sekunder
-                    if not ball_is_present:
-                        response = 'no_press'
-                    else:
-                        response = 'missed'
-                    # SLUT: Bryd løkken uanset om det er 'no_press' eller 'missed'
-                    break 
-
-            # Tegn det hele på skærmen
+            # 2. Håndtering af Timeouts (Starter ved 22.5s)
+            if current_time >= RESPONSE_START_TIME and response_start_time == 0.0:
+                 response_start_time = current_time 
+            
+            if current_time >= (RESPONSE_START_TIME + RESPONSE_DURATION) and not responded:
+                 responded = True
+                 ReactionTime = RESPONSE_DURATION 
+                 response = 'no_press' if not ball_is_present else 'missed'
+                 break 
+            
             self.win.flip()
             
-        # NULSTIL videoen, så den ikke fortsætter i baggrunden
         if stimulus.status != visual.FINISHED:
             stimulus.stop()
 
+        # --- Log trial data (kun hvis forsøget IKKE blev skippet) ---
+        if response != 'SKIP_BLOCK':
+            if not responded:
+                ReactionTime = RESPONSE_DURATION
+                response = 'no_press' if not ball_is_present else 'missed'
 
-        # --- Log trial data efter videoafslutning ---
-        # Sikkerhedscheck for ikke-besvaret forsøg
-        if not responded:
-            ReactionTime = RESPONSE_DURATION
-            if not ball_is_present:
-                response = 'no_press'
-            else:
-                response = 'missed'
-
-
-        self.trial_data.append({
-            'trial_num': self.trial_num,
-            'trial_type': trial_type,
-            'response': response,
-            'ReactionTime': ReactionTime,
-            'Ball_present': condition_details['Ball_present'],
-            'Part_belief': condition_details['Part_belief'],
-            'Agent_belief': condition_details['agent_belief'],
-            'Condition': condition_details['condition'],
-            'Agent_Type': 'Smurf' if self.current_agent_stim == self.smurf_agent else 'Self',
-            'is_buffer': is_buffer # NYT: Log buffer-status
-        })
+            self.trial_data.append({
+                'trial_num': self.trial_num,
+                'trial_type': trial_type,
+                'response': response,
+                'ReactionTime': ReactionTime,
+                'Ball_present': condition_details['Ball_present'],
+                'Part_belief': condition_details['Part_belief'],
+                'Agent_belief': condition_details['agent_belief'],
+                'Condition': condition_details['condition'],
+                'Agent_Type': 'Smurf' if self.current_agent_stim == self.smurf_agent else 'Self',
+                'is_buffer': is_buffer 
+            })
         
-        # Slet alle eventuelle resterende events fra bufferen
-        event.clearEvents()
-        
-        # Fikseringskors (ITI)
-        fixation = visual.TextStim(self.win, text='+', color='white', height=50)
-        fixation.draw()
-        self.win.flip()
-        core.wait(1.0) 
+            event.clearEvents()
+            
+            # Fikseringskors (ITI)
+            fixation = visual.TextStim(self.win, text='+', color='white', height=50)
+            fixation.draw()
+            self.win.flip()
+            core.wait(1.0) 
+
+        # Returnerer status for at lade run_block vide, om den skal springe resten over
+        return response == 'SKIP_BLOCK'
 
     def practice_trials(self):
-        # ... (Praksis forsøg som før)
         practice_list = [cond['condition'] for cond in self.conditions] * (self.num_practice_trials // len(self.conditions))
         random.shuffle(practice_list)
         
-        # Denne løkke kører nu KUN 8 gange (8 betingelser * 1 gentagelse)
         for condition_name in practice_list:
-            # I praksis bruges Smurfen som standard
             self.current_agent_stim = self.smurf_agent
-            # buffer=False da det er praksis
-            self.run_trial(condition_name, practice=True, is_buffer=False) 
+            self.run_trial(condition_name, practice=True, is_buffer=False)
             
         self.trial_num = 0
         self.trial_data = [] # Fjern praksis data
@@ -379,11 +331,17 @@ class EM2Experiment:
         "\nTryk på ‘SPACE’ for at starte hovedeksperimentet.", color='white', wrapWidth=1200, height=30)
         end_practice_text.draw()
         self.win.flip()
-        event.waitKeys(keyList=['space'])
+        
+        # **RETTET:** Tjek for skip practice her
+        keys = event.waitKeys(keyList=['space', 'p', 'escape'])
+        if 'p' in keys:
+             print("Praksis forsøg sprunget over med 'p' tasten.")
+             return 
+        elif 'escape' in keys:
+             self.quit_experiment()
         
     def _block_transition(self, block_num):
         """Viser en pausebesked mellem blokkene."""
-        # Denne funktion er designet til at vise info om den *kommende* blok
         agent_type = f"Self-Agent ({self.subject_name})" 
         
         transition_text = visual.TextStim(self.win, text=f"Forbered dig på BLOK 2." \
@@ -391,23 +349,67 @@ class EM2Experiment:
         "\nTag en kort pause.\n\nTryk på ‘SPACE’ for at fortsætte.", color='white', wrapWidth=1200, height=30)
         transition_text.draw()
         self.win.flip()
-        event.waitKeys(keyList=['space'])
-
-    # RETTET: block_num tilføjet som argument
+        
+        # **RETTET:** Tjek for skip block tast (p)
+        keys = event.waitKeys(keyList=['space', 'p', 'escape'])
+        if 'p' in keys:
+            print("Blok 2 overgang sprunget over af brugeren med 'p' tasten.")
+            raise StopIteration("Blok 2 overgang sprunget over.")
+        elif 'escape' in keys:
+            self.quit_experiment()
+    
     def run_block(self, block_num, trials_list, agent_stim):
-        """Kører en hel eksperimentblok."""
+        """Kører en hel eksperimentblok. Kan springes over med 'p'-tasten."""
         self.current_agent_stim = agent_stim
         
         for i, condition_name in enumerate(trials_list):
-            # Bestem om det er et buffer trial (de første NUM_BUFFER_TRIALS i listen)
+            
             is_buffer_trial = i < NUM_BUFFER_TRIALS
             
-            self.run_trial(condition_name, practice=False, is_buffer=is_buffer_trial)
+            # run_trial returnerer True hvis 'p' blev trykket (SKIP_BLOCK)
+            skip_block = self.run_trial(condition_name, practice=False, is_buffer=is_buffer_trial)
+
+            if skip_block:
+                print(f"Blok {block_num} sprunget over af brugeren med 'p' tasten.")
+                self.trial_num = 0
+                return # Afslut run_block funktionen tidligt
+
+    def log_skipped_questionnaire(self, agent_type):
+        """Logs 'SKIPPED' for alle questionnaire items og rydder op i delvise svar."""
+        
+        num_questions_logged = 0
+        for i in range(len(self.trial_data) - 1, -1, -1):
+            if self.trial_data[i].get('trial_type') == 'Questionnaire' and self.trial_data[i].get('Agent_Type') == agent_type:
+                num_questions_logged += 1
+            else:
+                break
+        
+        if num_questions_logged > 0:
+            self.trial_data = self.trial_data[:-num_questions_logged]
+            
+        self.trial_num = 0 
+        
+        for q_idx, question_text in enumerate(self.questionnaire_questions):
+            self.trial_num += 1 
+            self.trial_data.append({
+                'trial_num': self.trial_num,
+                'trial_type': 'Questionnaire',
+                'Agent_Type': agent_type,
+                'Question_ID': q_idx + 1,
+                'Question_Text': question_text,
+                'Questionnaire_Response': 'SKIPPED',
+                'is_buffer': 'N/A', 
+                'response': 'N/A',
+                'ReactionTime': 'N/A',
+                'Ball_present': 'N/A',
+                'Part_belief': 'N/A',
+                'Agent_belief': 'N/A',
+                'Condition': 'N/A'
+            })
 
     def questionnaire_block(self, block_num):
-        """Kører spørgeskemaet og logger svarene."""
+        """Kører spørgeskemaet og logger svarene. Kan springes over med 'p'-tasten."""
         
-        # Bestem hvilken agent der lige er brugt
         agent_type = "Smurf" if block_num == 1 else "Self"
         
         # Instruktioner
@@ -416,17 +418,26 @@ class EM2Experiment:
                                         "\nDu bliver præsenteret for et udsagn og skal derefter angive" \
                                         "\nhvor enig du er i det givne udsagn på en skala fra 1-7.\n" \
                                         "\n**1 = helt uenig og 7 = helt enig**"
-                                        "\n\nTryk på ‘SPACE’ for at komme videre", 
+                                        "\n\nTryk på ‘SPACE’ for at komme videre.", 
         color='white', wrapWidth=1200, height=30)
         instructions.draw()
         self.win.flip()
-        event.waitKeys(keyList=['space'])
+        
+        # **RETTET:** Tjek for skip questionnaire tast (p) på instruktionsskærmen
+        keys_inst = event.waitKeys(keyList=['space', 'p', 'escape'])
+        if 'p' in keys_inst:
+            print(f"Spørgeskema Blok {block_num} sprunget over af brugeren med 'p' tasten fra instruktionsskærmen.")
+            self.log_skipped_questionnaire(agent_type)
+            return
+        elif 'escape' in keys_inst:
+            self.quit_experiment()
+
 
         # Skala tekst (vises på alle spørgsmål)
         scale_text = visual.TextStim(self.win, text="**1 = Helt uenig** **7 = Helt enig**", 
                                      pos=[0, -300], height=25, color='gray')
         
-        # Input/feedback tekst
+        # Input/feedback tekst (RET FRA '+' til 'p')
         response_text_stim = visual.TextStim(self.win, text="", pos=[0, -150], height=40, color='yellow')
         
         for q_idx, question_text in enumerate(self.questionnaire_questions):
@@ -440,18 +451,23 @@ class EM2Experiment:
                 # 1. Tegn stimuli
                 question_stim.draw()
                 scale_text.draw()
-                response_text_stim.setText(f"Svar (1-7) eller Esc: {response_str}")
+                # Opdater prompten for at inkludere 'p' som skip
+                response_text_stim.setText(f"Svar (1-7) eller Esc/p: {response_str}") 
                 response_text_stim.draw()
                 self.win.flip()
                 
-                # 2. Hent taster
-                keys = event.getKeys(keyList=['1', '2', '3', '4', '5', '6', '7', 'return', 'backspace', 'escape'])
+                # 2. Hent taster - TILFØJET 'p'
+                keys = event.getKeys(keyList=['1', '2', '3', '4', '5', '6', '7', 'return', 'backspace', 'escape', 'p'])
                 
                 if keys:
                     key = keys[0]
                     
+                    if key == 'p': # RET FRA '+'
+                        print(f"Spørgeskema Blok {block_num} sprunget over af brugeren med 'p' tasten midt i spørgsmålene.")
+                        self.log_skipped_questionnaire(agent_type)
+                        return # Afslut questionnaire_block
+
                     if key in ['1', '2', '3', '4', '5', '6', '7']:
-                        # Tillad kun ét ciffer
                         if len(response_str) == 0:
                             response_str = key
                     
@@ -460,10 +476,8 @@ class EM2Experiment:
                         
                     elif key == 'return':
                         if response_str in ['1', '2', '3', '4', '5', '6', '7']:
-                            # Svaret er gyldigt
                             valid_response = True
                             
-                            # Log data
                             self.trial_data.append({
                                 'trial_num': self.trial_num,
                                 'trial_type': 'Questionnaire',
@@ -471,7 +485,6 @@ class EM2Experiment:
                                 'Question_ID': q_idx + 1,
                                 'Question_Text': question_text,
                                 'Questionnaire_Response': int(response_str),
-                                # Sæt N/A for Trial-specifikke felter
                                 'is_buffer': 'N/A', 
                                 'response': 'N/A',
                                 'ReactionTime': 'N/A',
@@ -480,19 +493,15 @@ class EM2Experiment:
                                 'Agent_belief': 'N/A',
                                 'Condition': 'N/A'
                             })
-                            # Tæl op for at sikre unikke rækkenumre i datafilen
                             self.trial_num += 1 
                         else:
-                            # Visuel feedback om ugyldigt input
                             response_str = ""
                             
                     elif key == 'escape':
                         self.quit_experiment()
                         
-            # Kort pause mellem spørgsmål
             core.wait(0.5)
         
-        # Vis bekræftelse
         complete_text = visual.TextStim(self.win, text="Spørgeskemaet er færdigt.\n\nTryk på 'SPACE' for at fortsætte.", color='white')
         complete_text.draw()
         self.win.flip()
@@ -508,23 +517,31 @@ class EM2Experiment:
         
         # 3. KØR EKSPERIMENT
         
-        # Vis instruktioner
         self.show_instructions()
         
         # Kør praksis (bruger Smurf Agent)
         self.practice_instructions()
-        self.practice_trials()
+        self.practice_trials() 
         
         # --- BLOK 1: SMURF (8 trials + 2 buffer) ---
         self.run_block(1, self.trials_list_block1, self.smurf_agent)
         
-        # Overgang til Blok 2
-        self.trial_num = 0 # Nulstil tælleren for blok 2's data
+        # Spørgeskema 1
+        self.trial_num = 0 
         self.questionnaire_block(1)
-        self._block_transition(1)
+        
+        # Overgang til Blok 2
+        self.trial_num = 0 
+        try:
+            self._block_transition(1) 
+        except StopIteration:
+            # Hvis vi springer over overgangen (og dermed Blok 2), skal vi logge data og afslutte
+            self.save_data()
+            self.quit_experiment()
+            return
 
         # --- BLOK 2: SELF AGENT (8 trials + 2 buffer) ---
-        self.run_block(2, self.trials_list_block2, self.self_agent)
+        self.run_block(2, self.trials_list_block2, self.self_agent) 
         self.questionnaire_block(2)
 
         # Gem data
@@ -536,31 +553,33 @@ class EM2Experiment:
     def save_data(self):
         """Gemmer data i mappen 'Data' med Subject ID som filnavn."""
         
-        # Filnavn er Subject ID + .csv
         filename = f'{self.subject_id}.csv'
-        # Sti er Data/SubjectID.csv
         data_dir = 'Data'
         full_path = os.path.join(data_dir, filename)
         
         if not os.path.exists(data_dir):
-            os.makedirs(data_dir) # Opret 'Data' mappen hvis den ikke eksisterer
+            os.makedirs(data_dir) 
             
         thisExp = data.ExperimentHandler(name='EM2_Kovacs_Replication', dataFileName=full_path)
         
-        # Bestem hvilke nøgler der skal bruges for at logge alle data
         keys = ['subject_id', 'subject_name', 'trial_num', 'trial_type', 'Agent_Type', 
                 'is_buffer', 'Questionnaire_Response', 'Question_ID', 'Question_Text',
                 'response', 'ReactionTime', 'Ball_present', 'Part_belief', 'Agent_belief', 'Condition']
                 
         for trial in self.trial_data:
-            # Sikrer at Questionnaire-data og Trial-data kan logges i samme fil
             for key in keys:
-                value = trial.get(key, 'N/A' )
+                if key == 'subject_id':
+                    value = self.subject_id
+                elif key == 'subject_name':
+                    value = self.subject_name
+                else:
+                    value = trial.get(key, 'N/A' )
                 
-                if key == 'Condition' and trial.get('trial_type') != 'Questionnaire':
+                if key == 'Condition' and trial.get('trial_type') != 'Questionnaire' and isinstance(value, str) and len(value) > 4:
                     # Udfør beskæring: 'P+A+(+)' bliver til 'P+A-'
-                    # Vi tager de første fire tegn.
                     value = value[:4]
+                
+                thisExp.addData(key, value)
             
             thisExp.nextEntry() 
         
@@ -576,7 +595,6 @@ class EM2Experiment:
 
 # Kør eksperimentet
 if __name__ == '__main__':
-    # Kontrollér om 'Assets' mappen eksisterer
     if not os.path.exists(VIDEO_DIR):
         print(f"FEJL: Mappen '{VIDEO_DIR}' blev ikke fundet. Opret mappen og placer videoerne/billederne der.")
         core.quit()
