@@ -3,6 +3,8 @@ import random
 import os
 import sys # Til at afslutte programmet pænt ved annullering af dialog
 
+# VERSION 0.8.5
+
 # Definer stien til videos
 VIDEO_DIR = 'Assets'
 # Tider for agent-animation (baseret på din 25 sek. video)
@@ -249,7 +251,7 @@ class EM2Experiment:
             self.win.flip()
             core.wait(2)
             # Log data selvom fil mangler
-            self.trial_data.append({'trial_num': self.trial_num, 'trial_type': trial_type, 'response': 'FILE_MISSING', 'rt': -1, 
+            self.trial_data.append({'trial_num': self.trial_num, 'trial_type': trial_type, 'response': 'FILE_MISSING', 'ReactionTime': -1, 
                                     'Ball_present': ball_is_present, 'Part_belief': condition_details['Part_belief'],
                                     'Agent_belief': condition_details['agent_belief'], 'Condition': condition_details['condition'],
                                     'Agent_Type': 'Smurf' if self.current_agent_stim == self.smurf_agent else 'Self',
@@ -265,7 +267,7 @@ class EM2Experiment:
         responded = False
         response_start_time = 0.0
         response = 'None'
-        rt = -1.0
+        ReactionTime = -1.0
         
         # --- Hovedforsøgsløkken ---
         self.clock.reset() # Nulstil klokken for forsøget
@@ -303,14 +305,14 @@ class EM2Experiment:
                     elif 'space' in keys:
                         responded = True
                         response = 'space'
-                        rt = current_time - response_start_time
+                        ReactionTime = current_time - response_start_time
                         # Bryd løkken her, hvis der er svaret med 'space'
                         break 
                 
                 # Håndtering af Timeouts
                 if not responded and current_time >= (response_start_time + RESPONSE_DURATION):
                     responded = True
-                    rt = RESPONSE_DURATION # 2.5 sekunder
+                    ReactionTime = RESPONSE_DURATION # 2.5 sekunder
                     if not ball_is_present:
                         response = 'no_press'
                     else:
@@ -329,7 +331,7 @@ class EM2Experiment:
         # --- Log trial data efter videoafslutning ---
         # Sikkerhedscheck for ikke-besvaret forsøg
         if not responded:
-            rt = RESPONSE_DURATION
+            ReactionTime = RESPONSE_DURATION
             if not ball_is_present:
                 response = 'no_press'
             else:
@@ -340,7 +342,7 @@ class EM2Experiment:
             'trial_num': self.trial_num,
             'trial_type': trial_type,
             'response': response,
-            'rt': rt,
+            'ReactionTime': ReactionTime,
             'Ball_present': condition_details['Ball_present'],
             'Part_belief': condition_details['Part_belief'],
             'Agent_belief': condition_details['agent_belief'],
@@ -472,7 +474,7 @@ class EM2Experiment:
                                 # Sæt N/A for Trial-specifikke felter
                                 'is_buffer': 'N/A', 
                                 'response': 'N/A',
-                                'rt': 'N/A',
+                                'ReactionTime': 'N/A',
                                 'Ball_present': 'N/A',
                                 'Part_belief': 'N/A',
                                 'Agent_belief': 'N/A',
@@ -548,20 +550,17 @@ class EM2Experiment:
         # Bestem hvilke nøgler der skal bruges for at logge alle data
         keys = ['subject_id', 'subject_name', 'trial_num', 'trial_type', 'Agent_Type', 
                 'is_buffer', 'Questionnaire_Response', 'Question_ID', 'Question_Text',
-                'response', 'rt', 'Ball_present', 'Part_belief', 'Agent_belief', 'Condition']
+                'response', 'ReactionTime', 'Ball_present', 'Part_belief', 'Agent_belief', 'Condition']
                 
         for trial in self.trial_data:
             # Sikrer at Questionnaire-data og Trial-data kan logges i samme fil
             for key in keys:
-                # Brug .get() for at få værdien, eller 'N/A' hvis nøglen ikke findes (f.eks. Trial-felter i Questionnaire-rækker)
-                value = trial.get(key, 'N/A')
-                # For Condition, som kun findes i Trial-data
-                if key == 'Condition':
-                    thisExp.addData(key, trial.get(key, 'N/A')) 
-                elif key == 'Question_Text':
-                    thisExp.addData(key, value)
-                else:
-                    thisExp.addData(key, value)
+                value = trial.get(key, 'N/A' )
+                
+                if key == 'Condition' and trial.get('trial_type') != 'Questionnaire':
+                    # Udfør beskæring: 'P+A+(+)' bliver til 'P+A-'
+                    # Vi tager de første fire tegn.
+                    value = value[:4]
             
             thisExp.nextEntry() 
         
