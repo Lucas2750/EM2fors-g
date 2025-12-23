@@ -359,19 +359,19 @@ class EM2Experiment:
                     if response == 'hit':
                         feedback_text = "Rigtigt!" 
                     elif response == 'missed':
-                        feedback_text = "Husk det er tilfældigt om bolden er der, tryk 'B' når du ser den"
+                        feedback_text = "Husk at trykke 'B' når du ser bolden"
                 else: # Bold is not present
                     if response == 'no_press':
                         feedback_text = "Rigtigt!" 
                     elif response == 'false_alarm':
-                        feedback_text = "Husk det er tilfældigt om bolden er der, tryk ikke 'B' hvis du ikke ser den"
+                        feedback_text = "Husk du skal ikke trykke 'B' hvis du ikke ser bolden"
                 
                 # Logik for X-tast feedback (tilføj til eksisterende feedback)
                 x_feedback = ""
                 if x_hit == 'No':
                     x_feedback = "\n\nOBS: Du missede at trykke 'X' da agenten var ude af skærmen."
                 elif x_false_alarm_count > 0:
-                    x_feedback = f"\n\nOBS: Du trykkede 'X' {x_false_alarm_count} gang(e) uden for vinduet. Tryk kun når agenten er ude."
+                    x_feedback = f"\n\nOBS: Du trykkede 'X' {x_false_alarm_count} gang(e) uden for vinduet. \nTryk kun når agenten er ude eller på vej ud."
 
                 # Kombiner feedback
                 if x_feedback:
