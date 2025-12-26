@@ -1,0 +1,390 @@
+---
+title: "EM2_databehandling"
+output: pdf_document
+date: "2025-12-03"
+---
+
+```{r setup, include=FALSE}
+library("rstatix")
+library("psych")
+library("tidyverse")
+library("BayesFactor")
+```
+
+## Pre-processing of data
+
+```{r}
+
+# get list of data files in current directory (excluding questionnaire data)
+list_of_files <- setdiff(dir(pattern=".csv"), "questionnaire.csv")
+
+# create data frame
+df <- read_delim(list_of_files) %>%
+  mutate(ReactionTime = ReactionTime * 1000)
+
+# identify subjects to exclude
+slow_subjects <- df %>%
+  filter(Ball_present == TRUE) %>%
+  group_by(subject_id) %>%
+  summarise(RT_over_1000 = sum(ReactionTime > 1000, na.rm = TRUE)) %>%
+  filter(RT_over_1000 > 4) %>%
+  pull(subject_id)
+
+# exclude slow subjects and inattentive trials
+df_ex <- df %>%
+  filter(!subject_id %in% slow_subjects, 
+         response == "missed" | ReactionTime < 1000, # mangler Ball_present == FALSE
+         X_Hit == "Yes") 
+
+# create final data frame to use for analysis
+df_final <- df_ex %>%
+  filter(Ball_present == TRUE, response == "hit") %>% 
+  group_by(subject_id) %>%
+  mutate(Agent_First  = first(Agent_Type),
+         Agent_Second = if_else(Agent_First == "Self", "Smurf", "Self")
+         ) %>%
+  ungroup()
+  
+```
+## Pre-processing of questionnaire data
+
+```{r}
+
+# create questionnaire data frame
+quest <- read.csv("questionnaire.csv", sep=";")
+
+# correct subject-id's to fit other data frame
+quest$subject_id[quest$subject_id == 1] <- "0001"
+quest$subject_id[quest$subject_id == 409] <- "0409"
+quest$subject_id[quest$subject_id == 511] <- "0511"
+quest$subject_id[quest$subject_id == 708] <- "0708"
+
+# compute immersiveness scores
+quest_scores <- quest %>%
+  mutate(score_smurf = (
+           Q1_smurf +
+           Q2_smurf +
+           Q3_smurf +
+           Q4_smurf +
+           Q5_smurf +
+           Q6_smurf +
+           Q7_smurf +
+           Q8_smurf) / 8,
+         score_self = (
+           Q1_self +
+           Q2_self +
+           Q3_self +
+           Q4_self +
+           Q5_self +
+           Q6_self +
+           Q7_self +
+           Q8_self) / 8
+         )
+
+# combine data frames
+df_combined <- df_final %>%
+  group_by(subject_id, Agent_Type, Condition, Agent_First) %>%
+  summarise(meanRT = mean(ReactionTime, na.rm = TRUE)) %>%
+  ungroup() %>%
+  left_join(quest_scores %>% select(subject_id, score_smurf, score_self, Q1_self, Q8_self),
+            by = "subject_id")
+```
+
+
+## Accuracy
+
+```{r}
+
+hits <- df_ex %>% 
+  filter(response == "hit")
+
+misses <- df_ex %>%
+  filter(response == "missed")
+
+false_alarms <- df_ex %>%
+  filter(response == "false_alarm")
+
+correct_rejections <- df_ex %>%
+  filter(response == "no_press")
+
+# errors
+errors <- nrow(false_alarms) + nrow(misses)
+
+# error percentage
+errors / nrow(df_ex) * 100
+
+# false alarm percentage
+nrow(false_alarms) / nrow(df_ex) * 100
+
+
+```
+
+
+## RT plots
+
+```{r}
+
+# compute mean RTs for smurf trials
+means_smurf <- df_combined %>% 
+  filter(Agent_Type == "Smurf") %>% 
+  group_by(Condition) %>% 
+  summarise(meanRT_smurf = mean(meanRT, na.rm = TRUE),
+            SD = sd(meanRT),
+            N = n(),
+            SE = SD / sqrt(N))
+
+
+means_smurf$Condition <- factor(means_smurf$Condition, 
+                                levels = c("P+A-","P-A+","P-A-","P+A+")) 
+
+# plot mean RTs for smurf trials
+ggplot(means_smurf, aes(x = meanRT_smurf, y = Condition)) +
+  geom_col(fill = "#0096FF") +
+  geom_errorbarh(aes(xmin = meanRT_smurf - SE, xmax = meanRT_smurf + SE),
+                 height = 0.2, size = 0.4) +
+  coord_cartesian(xlim = c(400, 560)) +
+  scale_x_continuous(
+    breaks = seq(400, 560, by = 10)
+    ) +
+  labs(title = "Mean Reaction Times (Smurf)",
+       x = "Mean Reaction Time",
+       y = "Condition"
+       ) +
+  theme_grey(base_size = 12)
+
+# compute mean RTs for self trials
+means_self <- df_combined %>% 
+  filter(Agent_Type == "Self") %>% 
+  group_by(Condition) %>% 
+  summarise(meanRT_self = mean(meanRT, na.rm = TRUE),
+            SD = sd(meanRT),
+            N = n(),
+            SE = SD / sqrt(N))
+
+means_self$Condition <- factor(means_self$Condition, 
+                               levels = c("P+A-","P-A+","P-A-","P+A+"))  
+
+# plot mean RTs for self trials
+ggplot(means_self, aes(x = meanRT_self, y = Condition)) +
+  geom_col(fill = "#FF00FF") +
+  geom_errorbarh(aes(xmin = meanRT_self - SE, xmax = meanRT_self + SE),
+                 height = 0.2, size = 0.4) +
+  coord_cartesian(xlim = c(400, 560)) +
+  scale_x_continuous(
+    breaks = seq(400, 560, by = 10)
+    ) +
+  labs(title = "Mean Reaction Times (Self)",
+       x = "Mean Reaction Time",
+       y = "Condition"
+       ) +
+  theme_grey(base_size = 12)
+
+# compute overall mean RTs
+means_overall <- df_combined %>% 
+  group_by(Condition) %>% 
+  summarise(meanRT_overall = mean(meanRT, na.rm = TRUE),
+            SD = sd(meanRT),
+            N = n(),
+            SE = SD / sqrt(N))
+
+# plot overall mean RTs
+ggplot(means_overall, aes(x = meanRT_overall, y = Condition)) +
+  geom_col(fill = "grey") +
+  geom_errorbarh(aes(xmin = meanRT_overall - SE, xmax = meanRT_overall + SE),
+                 height = 0.2, size = 0.4) +
+  coord_cartesian(xlim = c(400, 560)) +
+  scale_x_continuous(
+    breaks = seq(400, 560, by = 10)
+    ) +
+  labs(title = "Mean Reaction Times (Overall)",
+       x = "Mean Reaction Time",
+       y = "Condition"
+       ) +
+  theme_grey(base_size = 12)
+
+```
+
+## Compute means
+
+```{r}
+
+d
+
+```
+
+
+## T-tests for ToM-index
+
+```{r}
+
+# transform to wide format
+df_wide <- df_combined %>%
+  pivot_wider(
+    names_from = Condition,
+    values_from = meanRT
+  ) %>%
+  mutate(mean_diff = `P-A-` - `P-A+`)
+
+# filter self trials
+df_self_wide <- df_wide %>%
+  filter(Agent_Type == "Self")
+
+# filter smurf trials
+df_smurf_wide <- df_wide %>%
+  filter(Agent_Type == "Smurf")
+
+# self ToM-index 
+ttestBF(df_self_wide$`P-A+`, df_self_wide$`P-A-`, paired = TRUE)
+
+# smurf ToM-index
+ttestBF(df_smurf_wide$`P-A+`, df_smurf_wide$`P-A-`, paired = TRUE)
+
+# overall ToM-index
+ttestBF(df_wide$`P-A+`, df_wide$`P-A-`, paired = TRUE)
+
+# difference between self and smurf in ToM-index
+ttestBF(df_self_wide$mean_diff, df_smurf_wide$mean_diff, paired = TRUE)
+
+```
+
+## Block order effects
+
+```{r}
+
+# filter by block order
+df_self_first <- df_combined %>%
+  filter(Agent_First == "Self")
+
+df_smurf_first <- df_combined %>%
+  filter(Agent_First == "Smurf")
+
+```
+
+
+## Questionnaire correlations
+
+```{r}
+
+# filter out missing data
+df_self_wide_filt <- df_self_wide %>%
+  filter(subject_id != 1738)
+
+# correlation test self
+cor.test(df_self_wide_filt$score_self, df_self_wide_filt$mean_diff)
+correlationBF(df_self_wide_filt$score_self, df_self_wide_filt$mean_diff)
+
+ggplot(df_self_wide_filt, aes(x = score_self, y = mean_diff)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +
+  theme_minimal() +
+  labs(x = "Immersiveness score", y = "ToM-index",
+       title = "Correlation Plot (Self)")
+
+# filter out missing data
+df_smurf_wide_filt <- df_self_wide %>%
+  filter(subject_id != 1738)
+
+# correlation test smurf
+cor.test(df_smurf_wide_filt$score_smurf, df_smurf_wide_filt$mean_diff)
+correlationBF(df_smurf_wide_filt$score_smurf, df_smurf_wide_filt$mean_diff)
+
+ggplot(df_smurf_wide_filt, aes(x = score_smurf, y = mean_diff)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +
+  theme_minimal() +
+  labs(x = "Immersiveness score", y = "ToM-index",
+       title = "Correlation Plot (Smurf)")
+
+# correlation between identification (Q1) and ToM-index in self trials
+cor.test(df_self_wide_filt$Q1_self, df_self_wide_filt$mean_diff)
+correlationBF(df_self_wide_filt$Q1_self, df_self_wide_filt$mean_diff)
+
+ggplot(df_self_wide_filt, aes(x = Q1_self, y = mean_diff)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +
+  theme_minimal() +
+  labs(x = "Q1", y = "ToM-index",
+       title = "Correlation Plot (Self-Identification)")
+```
+
+## Questionnaire means
+
+```{r}
+
+# filter out missing data
+quest_scores_filt <- quest_scores %>%
+  filter(subject_id != 1738)
+
+# calculate mean scores
+mean(quest_scores_filt$score_self)
+mean(quest_scores_filt$score_smurf, na.rm = TRUE)
+
+ttestBF(quest_scores_filt$score_self, quest_scores_filt$score_smurf, paired = TRUE)
+
+# mean Q8 score
+mean(quest_scores$Q8_self)
+mean(quest_scores$Q8_smurf, na.rm = TRUE)
+
+
+```
+
+## Exclusions based on immersiveness scores
+
+```{r}
+
+df_filtered <- 
+
+self_filtered_means <- df_filtered %>%
+  filter(Agent_Type == "Self") %>% 
+  group_by(Condition) %>% 
+  summarise(meanRT_self = mean(meanRT, na.rm = TRUE),
+            SD = sd(meanRT),
+            N = n(),
+            SE = SD / sqrt(N))
+
+ggplot(self_filtered_means, aes(x = meanRT_self, y = Condition)) +
+  geom_col(fill = "pink") +
+  coord_cartesian(xlim = c(400, 600)) +
+  labs(title = "Mean Reaction Times (Self)",
+       x = "Mean Reaction Time",
+       y = "Condition"
+       ) +
+  theme_minimal(base_size = 12)
+
+df_self_filtered_wide <- df_self_filtered %>%
+  pivot_wider(
+    names_from = Condition,
+    values_from = meanRT
+  ) %>%
+  mutate(mean_diff = `P-A-` - `P-A+`)
+
+ttestBF(df_self_filtered_wide$`P-A+`, df_self_filtered_wide$`P-A-`)
+
+```
+## Linear mixed model
+
+```{r}
+
+library(dplyr)
+library(lme4)
+library(lmerTest)
+library(effects)
+library(emmeans)
+
+model <- lmer(
+  ReactionTime ~ Part_belief + (1 | subject_id),
+  data = df_final
+  )
+
+summary(model)
+
+plot(allEffects(model))
+
+# emmeans(model,Condition~Agent_Type)
+
+# %>% filter(Condition %in% c('P-A-','P-A+')
+
+```
+
+
+
