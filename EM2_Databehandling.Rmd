@@ -107,13 +107,13 @@ false_alarms <- df_ex %>%
 correct_rejections <- df_ex %>%
   filter(response == "no_press")
 
-# errors
+# calculate errors
 errors <- nrow(false_alarms) + nrow(misses)
 
-# error percentage
+# calculate error percentage
 errors / nrow(df_ex) * 100
 
-# false alarm percentage
+# calculate false alarm percentage
 nrow(false_alarms) / nrow(df_ex) * 100
 
 
@@ -133,7 +133,7 @@ means_smurf <- df_combined %>%
             N = n(),
             SE = SD / sqrt(N))
 
-
+# change order of conditions in data frame
 means_smurf$Condition <- factor(means_smurf$Condition, 
                                 levels = c("P+A-","P-A+","P-A-","P+A+")) 
 
@@ -161,6 +161,7 @@ means_self <- df_combined %>%
             N = n(),
             SE = SD / sqrt(N))
 
+# change order of conditions in data frame
 means_self$Condition <- factor(means_self$Condition, 
                                levels = c("P+A-","P-A+","P-A-","P+A+"))  
 
@@ -372,8 +373,8 @@ library(effects)
 library(emmeans)
 
 model <- lmer(
-  ReactionTime ~ Part_belief + (1 | subject_id),
-  data = df_final
+  meanRT ~ Condition * Agent_First * Agent_Type + (1 | subject_id),
+  data = df_combined %>% filter(Condition %in% c('P-A-','P-A+'))
   )
 
 summary(model)
@@ -386,5 +387,31 @@ plot(allEffects(model))
 
 ```
 
+```{r}
+
+
+model2 <- lmer(
+  ReactionTime ~ Part_belief + (1 | subject_id),
+  data = df_final
+  )
+
+summary(model2)
+
+plot(allEffects(model2))
+
+```
+
+```{r}
+
+model3 <- lmer(
+  ReactionTime ~ Agent_belief + (1 | subject_id),
+  data = df_final
+  )
+
+summary(model3)
+
+plot(allEffects(model3))
+
+```
 
 
