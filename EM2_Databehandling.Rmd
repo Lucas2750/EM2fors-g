@@ -25,7 +25,7 @@ list_of_files <- setdiff(dir(pattern=".csv"), "questionnaire.csv")
 
 # create data frame
 df <- read_delim(list_of_files) %>%
-  mutate(ReactionTime = ReactionTime * 1000)
+  mutate(ReactionTime = ReactionTime * 1000) 
 
 # identify subjects to exclude
 slow_subjects <- df %>%
@@ -35,10 +35,21 @@ slow_subjects <- df %>%
   filter(RT_over_1000 > 4) %>%
   pull(subject_id)
 
-# exclude slow subjects and inattentive trials
-df_ex <- df %>%
-  filter(!subject_id %in% slow_subjects, 
-         response == "missed" | ReactionTime < 1000, # mangler Ball_present == FALSE
+error_subjects <- df %>%
+  group_by(subject_id) %>%
+  summarise(error_trials = sum(response == "missed" | 
+              response == "false_alarm" |
+              (X_Hit == "No" & response == "hit"))) %>%
+  filter(error_trials > 8) %>%
+  pull(subject_id)
+
+# exclude subjects
+df_new <- df %>%
+  filter(!subject_id %in% slow_subjects, !subject_id %in% error_subjects)
+
+# exclude trials (slow RTs and no X-hit)
+df_ex <- df_new %>%
+  filter(!(Ball_present == TRUE & response == "hit" & ReactionTime > 1000),
          X_Hit == "Yes") 
 
 # create final data frame to use for analysis
@@ -51,7 +62,7 @@ df_final <- df_ex %>%
   ungroup()
   
 ```
-## Pre-processing including questionnaire data
+## Pre-processing of questionnaire data
 
 ```{r}
 
@@ -99,6 +110,16 @@ df_combined <- df_final %>%
 
 ```{r}
 
+no_x_hit <- df_new %>%
+  filter(X_Hit == "No")
+
+slow_trials <- df_new %>%
+  filter(Ball_present == TRUE & response == "hit" & ReactionTime > 1000)
+
+ex_trials <- df_new %>%
+  filter(X_Hit == "No" |
+        (Ball_present == TRUE & response == "hit" & ReactionTime > 1000))
+
 hits <- df_ex %>% 
   filter(response == "hit")
 
@@ -115,13 +136,22 @@ correct_rejections <- df_ex %>%
 errors <- nrow(false_alarms) + nrow(misses)
 
 # calculate error percentage
-errors / nrow(df_ex) * 100
+(errors / nrow(df_ex)) * 100
 
 # calculate false alarm percentage
-nrow(false_alarms) / nrow(df_ex) * 100
+(nrow(false_alarms) / nrow(df_ex)) * 100
 
 # calculate miss percentage
-nrow(misses) / nrow(df_ex) * 100
+(nrow(misses) / nrow(df_ex)) * 100
+
+# no x hit percentage
+nrow(no_x_hit) / nrow(df_new) * 100
+
+# slow trials percentage
+nrow(slow_trials) / nrow(df_new) * 100
+
+# excluded trials percentage
+nrow(ex_trials) / nrow(df_new) * 100
 
 ```
 
@@ -209,18 +239,6 @@ ggplot(means_overall, aes(x = meanRT_overall, y = Condition)) +
        y = "Condition"
        ) +
   theme_grey(base_size = 12)
-
-```
-
-## Compute means
-
-```{r}
-
-meanRT_smurf <- mean(means_smurf$meanRT_smurf)
-
-meanRT_self <- mean(means_self$meanRT_self)
-
-meanRT_overall <- mean(means_overall$meanRT_overall)
 
 ```
 
@@ -407,6 +425,31 @@ ggplot(means_smurf_first_self, aes(x = meanRT_self, y = Condition)) +
 
 ```
 
+## Compute means
+
+```{r}
+
+meanRT_smurf <- mean(means_smurf$meanRT_smurf)
+
+meanRT_self <- mean(means_self$meanRT_self)
+
+meanRT_overall <- mean(means_overall$meanRT_overall)
+
+mean_diff_smurf <- mean(df_smurf_wide$mean_diff)
+
+mean_diff_self <- mean(df_self_wide$mean_diff)
+
+mean_diff_self_first <- mean(df_self_first_self$mean_diff)
+
+# count self first and smurf first participants
+df_combined %>%
+  distinct(subject_id, Agent_First) %>%
+  count(Agent_First)
+
+  
+```
+
+
 ## Questionnaire correlations
 
 ```{r}
@@ -486,6 +529,11 @@ mean(quest_scores_filt$Q8_smurf)
 mean(quest_scores_filt$Q1_smurf)
 mean(quest_scores_filt$Q1_self)
 
+# mean perspective taking scores
+(mean(quest_scores_filt$Q8_self) + mean(quest_scores_filt$Q7_self) + mean(quest_scores_filt$Q6_self)) / 3
+
+(mean(quest_scores_filt$Q8_smurf) + mean(quest_scores_filt$Q7_smurf) + mean(quest_scores_filt$Q6_smurf)) / 3
+
 ```
 
 ## Linear mixed model
@@ -509,6 +557,7 @@ contrast(emm_agent, method = "pairwise")
 
 ```
 
+
 ```{r}
 
 model2 <- lmer(
@@ -519,6 +568,7 @@ model2 <- lmer(
 summary(model2)
 
 plot(allEffects(model2))
+
 ```
 
 ```{r}
@@ -526,7 +576,7 @@ plot(allEffects(model2))
 # participant belief
 model3 <- lmer(
   ReactionTime ~ Part_belief + (1 | subject_id),
-  data = df_final # %>% filter(Agent_First == "Smurf")
+  data = df_final %>% filter(Agent_First == "Smurf")
   )
 
 summary(model3)
@@ -541,7 +591,7 @@ plot(allEffects(model3))
 # agent belief
 model4 <- lmer(
   ReactionTime ~ Agent_belief + (1 | subject_id),
-  data = df_final # %>% filter(Agent_First == "Self")
+  data = df_final # %>% filter(Agent_First == "Self", Agent_Type == "Self")
   )
 
 summary(model4)
@@ -549,5 +599,4 @@ summary(model4)
 plot(allEffects(model4))
 
 ```
-
 
